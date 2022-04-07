@@ -1,3 +1,2 @@
 locationsharinglib~=4.1.8
-haversine~=2.5.1
-geographiclib
+geographiclib~=1.52

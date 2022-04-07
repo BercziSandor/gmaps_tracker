@@ -1,9 +1,12 @@
+import hs as hs
+from geographiclib.geodesic import Geodesic
 from locationsharinglib import Person
+# import haversine as hs
+import geographiclib
 
 
 def get_location(person: Person):
     return {'loc': (person.latitude, person.longitude), 'accuracy': person.accuracy}
-
 
 
 DIRECTION_NAMES_EN = ["north", "north east", "east", "south east", "south", "south west", "west",
@@ -50,12 +53,6 @@ def persons_dist_info(person1: Person, person2: Person):
     distance_meters = g['s12']
     bearing = g['azi1']
 
-    def get_bearing_name(bearing, points=DIRECTION_NAMES_HU):
-        bearing += (180.0 / len(points))
-
-        bearing = bearing % 360
-        bearing = int(bearing / (360.0 / len(points)))  # values 0 to 7
-        return points[bearing]
 
     # https://en.wikipedia.org/wiki/Points_of_the_compass#32_cardinal_points
     # 0:   N

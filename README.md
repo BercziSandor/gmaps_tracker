@@ -1,5 +1,9 @@
 # gmaps_tracker
-Logging of locations of shared connections
+Logging of locations of shared connections from Google Maps.
+
+Prerequisits:
+ - Cookies for authentication. See next chapter how to get them.
+ - 
 
 
 ## Get cookies for Google maps

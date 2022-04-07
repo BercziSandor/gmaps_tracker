@@ -1,4 +1,6 @@
 .idea/
+cookies.txt
+location_store.pickle.bz2
 
 ### Python template
 # Byte-compiled / optimized / DLL files
@@ -139,4 +141,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-

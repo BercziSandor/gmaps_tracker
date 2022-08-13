@@ -34,6 +34,11 @@ class Location:
 
     def __init__(self, lat: float = None, lon: float = None, epoch: int = None, accuracy: float = None,
                  event: dict = None, person: Person = None):
+        self.lat: float = None
+        self.lon: float = None
+        self.time: datetime = None
+        self.accuracy: float = None
+
         if person:
             self.lat: float = person.latitude
             self.lon: float = person.longitude
@@ -44,11 +49,13 @@ class Location:
             self.lon: float = event['lon']
             self.time: datetime = datetime.fromtimestamp(event['timestamp'])
             self.accuracy: float = event['accuracy']
-        else:
+        elif lat:
             self.lat: float = lat
             self.lon: float = lon
             self.time: datetime = datetime.fromtimestamp(epoch)
             self.accuracy: float = accuracy
+        else:
+            return None
 
     def get_move_info(self, another):
         def get_bearing_name(bearing: float) -> str:
@@ -179,7 +186,7 @@ class LocationData:
                 e1 = Location(event=self.get_last_event(person.full_name))
                 self.insert(person=person, now=now)
                 e2 = Location(event=self.get_last_event(person.full_name))
-                if e1.time==e2.time:
+                if e1 and e1.time == e2.time:
                     logging.info(" no change")
                 else:
                     move_info = e1.get_move_info(e2)
@@ -231,7 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--cookie-file', '-c',
                         default='cookies.txt',
                         dest='cookie_file',
-                        help='File containing cookies for Google',
+                        help='File containing cookies for Google. See ',
                         type=str
                         )
     parser.add_argument('--data-file', '-d',

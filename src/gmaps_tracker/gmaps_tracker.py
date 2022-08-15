@@ -89,6 +89,23 @@ def get_service(cookies_file='cookies.txt', google_email='berczi.sandor@gmail.co
     return l_service
 
 
+class MoveInfo():
+    """
+    TODO
+    """
+
+    def __init__(self, distance_meters: float, bearing: float, delta_t_sec: float,
+                 bearing_name: str, v_kmh: float, accuracy: float,
+                 different_points_for_sure: bool):
+        self.distance_meters: float = distance_meters
+        self.bearing: float = bearing
+        self.delta_t_sec: float = delta_t_sec
+        self.bearing_name: str = bearing_name
+        self.v_kmh: float = v_kmh
+        self.accuracy: float = accuracy
+        self.different_points_for_sure: bool = different_points_for_sure
+
+
 class Location:
     """
     Class for storing Location
@@ -150,16 +167,19 @@ class Location:
             v_kmh = 999.0
         else:
             v_kmh = (distance_meters / delta_t_sec) * 3.6
-        result = {
-            'distance_meters': distance_meters,
-            'bearing': bearing,
-            'delta_t': delta_t_sec,
-            'bearing_name': bearing_name,
-            'v': v_kmh,
-            'accuracy': self.accuracy + another.accuracy,
-            'different_points_for_sure': distance_meters > (self.accuracy + another.accuracy)
-        }
-        return result
+
+        accuracy = self.accuracy + another.accuracy
+        different_points_for_sure = distance_meters > (self.accuracy + another.accuracy)
+
+        return MoveInfo(
+            distance_meters=distance_meters,
+            bearing=bearing,
+            delta_t_sec=delta_t_sec,
+            bearing_name=bearing_name,
+            v_kmh=v_kmh,
+            accuracy=accuracy,
+            different_points_for_sure=different_points_for_sure
+        )
 
 
 class LocationData:
@@ -171,7 +191,7 @@ class LocationData:
                  save_interval_min: float = 0.2, wait_between_queries_sec: int = 15,
                  query_count=-2):
         self.next_save = 0.0
-        self.data = None
+        self.data = {}
         self.service = get_service(cookies_file=cookie_file)
         self.data_file_name = data_file_name
         self.save_interval_min = save_interval_min
@@ -181,7 +201,7 @@ class LocationData:
         logging.info("Me: %s", str(self.me.full_name))
         self.load()
 
-    def insert(self, person: Person, now: int = int(datetime.now().timestamp())):
+    def insert(self, person: Person, now: int = int(datetime.now().timestamp())) -> None:
         """
         Inserting a new event
         :param person:
@@ -191,12 +211,13 @@ class LocationData:
         if person is None:
             return
 
-        logging.info("** %s", person.full_name)
+        full_name = person.full_name
+        logging.info("** %s", full_name)
 
-        if person.full_name not in self.data:
-            self.data[person.full_name] = []
+        if full_name not in self.data:
+            self.data[full_name] = []
 
-        events = self.data[person.full_name]
+        events = self.data[full_name]
 
         # geolocator = Nominatim(user_agent="gmaps_tracker")
         # location = geolocator.reverse(f"{person.latitude}, {person.longitude}")
@@ -213,7 +234,7 @@ class LocationData:
         }
 
         if len(events) > 0:
-            e_1 = self.data[person.full_name][-1]
+            e_1 = self.data[full_name][-1]
 
             pop_last = False
             # timestamps are the same
@@ -229,25 +250,24 @@ class LocationData:
                                accuracy=e_0['accuracy'])
 
                 move_info = l_1.get_move_info(l_0)
-                if move_info.get('v') < 1.0:
+                if move_info.v_kmh < 1.0:
                     pop_last = True
                     e_0['inserted_at'] = e_1['inserted_at']
-                if move_info.get('different_points_for_sure'):
+                if move_info.different_points_for_sure:
                     pop_last = False
             if pop_last:
                 events.pop(-1)
         events.append(e_0)
 
-    def load(self):
+    def load(self) -> None:
         """
-        Loading data from a file
+        Loading data from a file, into self.data
         :return:
         """
         logging.info("Loading data from %s", self.data_file_name)
         if not os.path.exists(self.data_file_name):
             logging.info("File does not exist, skipping load.")
             self.data = {}
-            return
         with bz2.BZ2File(self.data_file_name, 'rb') as file:
             self.data = pickle.load(file)
         logging.info("Loaded %s entries.", self.get_data_entry_count())
@@ -274,7 +294,7 @@ class LocationData:
         with open(self.data_file_name + '.yaml', 'w', encoding='utf-8') as file:
             yaml.dump(self.data, file, allow_unicode=True)
 
-    def auto_save(self):
+    def auto_save(self) -> None:
         """
         Save data to a file periodically
         :return:

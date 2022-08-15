@@ -8,8 +8,37 @@ import time
 from datetime import datetime
 from typing import List
 
+import yaml
 from geographiclib.geodesic import Geodesic
+# from geopy.geocoders import Nominatim
 from locationsharinglib import Service, Person
+
+# sqlite:
+#   https://www.sqlitetutorial.net/sqlite-python/insert/
+#   https://www.tutorialspoint.com/python_data_access/python_sqlite_establishing_connection.htm
+# mysql?
+
+FORMAT_YYYYMMDD_HHMMSS = "%Y%m%d.%H%M%S"
+
+
+def u_dt_to_str(dt: datetime, format_string=FORMAT_YYYYMMDD_HHMMSS) -> str:
+    return dt.strftime(format_string)
+
+
+def u_epoch_to_dt(epoch: int) -> datetime:
+    return datetime.fromtimestamp(epoch)
+
+
+def u_str_to_dt(s, format_str=FORMAT_YYYYMMDD_HHMMSS) -> datetime:
+    return datetime.strptime(str(s), format_str)
+
+
+def u_str_to_epoch(s, format_str=FORMAT_YYYYMMDD_HHMMSS) -> int:
+    return u_str_to_dt(s).timestamp()
+
+
+def u_epoch_to_str(epoch: int) -> str:
+    return u_dt_to_str(u_epoch_to_dt(epoch))
 
 
 def get_service(cookies_file='cookies.txt', google_email='berczi.sandor@gmail.com') -> Service:
@@ -47,7 +76,7 @@ class Location:
         elif event:
             self.lat: float = event['lat']
             self.lon: float = event['lon']
-            self.time: datetime = datetime.fromtimestamp(event['timestamp'])
+            self.time: datetime = u_str_to_dt(str(event['timestamp']))
             self.accuracy: float = event['accuracy']
         elif lat:
             self.lat: float = lat
@@ -68,7 +97,7 @@ class Location:
             return points[bearing]
 
         g = Geodesic.WGS84.Inverse(self.lat, self.lon, another.lat, another.lon)
-        distance_meters = float(g['s12'])
+        distance_meters = float(abs(g['s12']))
         bearing = float(g['azi1'])
         bearing_name = get_bearing_name(bearing)
         delta_t_sec = another.time.timestamp() - self.time.timestamp()
@@ -77,12 +106,13 @@ class Location:
         else:
             v_kmh = (distance_meters / delta_t_sec) * 3.6
         result = {
-            'distance_meters': g['s12'],
+            'distance_meters': distance_meters,
             'bearing': bearing,
             'delta_t': delta_t_sec,
             'bearing_name': bearing_name,
             'v': v_kmh,
-            'accuracy': self.accuracy + another.accuracy
+            'accuracy': self.accuracy + another.accuracy,
+            'different_points_for_sure': distance_meters > (self.accuracy + another.accuracy)
         }
         return result
 
@@ -108,21 +138,47 @@ class LocationData:
         logging.info(f"** {person.full_name}")
 
         if person.full_name not in self.data:
-            self.data[person.full_name] = {}
-            last_timestamp = None
-            last_event = None
-        else:
-            last_timestamp = max(self.data[person.full_name].keys())
-            last_event = self.data[person.full_name][last_timestamp]
-        if now not in self.data[person.full_name]:
-            self.data[person.full_name][now] = {}
+            self.data[person.full_name] = []
 
-        self.data[person.full_name][now] = {
-            'timestamp': int(person.datetime.timestamp()),
+        events = self.data[person.full_name]
+
+        # geolocator = Nominatim(user_agent="gmaps_tracker")
+        # location = geolocator.reverse(f"{person.latitude}, {person.longitude}")
+        # address = location.address
+
+        e_0: dict = {
+            'inserted_at': float(u_dt_to_str(u_epoch_to_dt(now))),
+            'timestamp': float(u_dt_to_str(u_epoch_to_dt(int(person.datetime.timestamp())))),
             'lat': person.latitude,
             'lon': person.longitude,
+            'link': f"https://maps.google.com/?q={person.latitude},{person.longitude}",
+            # 'address': address,
             'accuracy': person.accuracy
         }
+
+        if len(events) > 0:
+            e_1 = self.data[person.full_name][-1]
+
+            pop_last = False
+            # timestamps are the same
+            if e_1['timestamp'] == e_0['timestamp']:
+                pop_last = True
+            else:
+                # 2: same coords / no move
+                l_1 = Location(lat=e_1['lat'], lon=e_1['lon'], epoch=u_str_to_epoch(e_1['timestamp']),
+                               accuracy=e_1['accuracy'])
+                l_0 = Location(lat=e_0['lat'], lon=e_0['lon'], epoch=u_str_to_epoch(e_0['timestamp']),
+                               accuracy=e_0['accuracy'])
+
+                move_info = l_1.get_move_info(l_0)
+                if move_info.get('v') < 1.0:
+                    pop_last = True
+                    e_0['inserted_at'] = e_1['inserted_at']
+                if move_info.get('different_points_for_sure'):
+                    pop_last = False
+            if pop_last:
+                events.pop(-1)
+        events.append(e_0)
 
     def load(self):
         logging.info(f"Loading data from {self.data_file_name}")
@@ -145,11 +201,17 @@ class LocationData:
         with bz2.BZ2File(self.data_file_name, 'wb') as FILE:
             pickle.dump(self.data, FILE)
 
+        with open(self.data_file_name + '.yaml', 'w', encoding='utf-8') as file:
+            documents = yaml.dump(self.data, file, allow_unicode=True)
+
     def auto_save(self):
         now = datetime.now().timestamp()
 
         do_schedule = False
-        if self.next_save is None or self.next_save == 0:
+        if not (os.path.exists(self.data_file_name)):
+            self.save()
+            do_schedule = True
+        elif self.next_save is None or self.next_save == 0:
             do_schedule = True
         elif self.next_save <= now:
             self.save()
@@ -161,12 +223,19 @@ class LocationData:
             logging.info(f"auto_save(): Next save scheduled in {self.save_interval_min} minutes.")
             self.next_save = now + self.save_interval_min * 60
 
-    def get_last_event(self, full_name: str):
+    def get_last_event_of_person(self, full_name: str):
         if full_name not in self.data:
             return None
-        k = sorted(self.data[full_name].keys())
-        last_timestamp = k[-1]
-        return self.data[full_name][last_timestamp]
+        # list
+        k = None
+        if len(self.data[full_name]) > 0:
+            k = self.data[full_name][-1]
+        return k
+
+        # hash
+        # k = sorted(self.data[full_name].keys())
+        # last_timestamp = k[-1]
+        # return self.data[full_name][last_timestamp]
 
     def collect(self, now=int(datetime.now().timestamp())):
         logging.info("Collecting data")
@@ -181,12 +250,18 @@ class LocationData:
 
         prev = {}
         while True:
+            googleResponses = self.service.get_all_people()
             now = int(datetime.now().timestamp())
-            for person in self.service.get_all_people():
-                e1 = Location(event=self.get_last_event(person.full_name))
-                self.insert(person=person, now=now)
-                e2 = Location(event=self.get_last_event(person.full_name))
-                if e1 and e1.time == e2.time:
+            for googleResponse in googleResponses:
+                yymmddhhmmss: float = u_dt_to_str(googleResponse.datetime)
+                self.insert(person=googleResponse, now=now)
+
+                last_event = self.get_last_event_of_person(full_name=googleResponse.full_name)
+                e1 = Location(event=last_event) if last_event else None
+                e2 = Location(event=self.get_last_event_of_person(full_name=googleResponse.full_name))
+                if not e1:
+                    continue
+                if e1.time == e2.time:
                     logging.info(" no change")
                 else:
                     move_info = e1.get_move_info(e2)
@@ -196,7 +271,8 @@ class LocationData:
                         logging.warning(f"Distance from you: {move_info['distance_meters']}")
                     else:
                         logging.info(f" Not moving. ({move_info['v']}km/h)")
-                    if move_info_to_me['distance_meters'] < 100:
+
+                    if move_info_to_me['distance_meters'] < 200:
                         logging.info(f" Near to you. ({int(move_info_to_me['distance_meters'])}m)")
                     else:
                         logging.info(f" Far from you. ({int(move_info_to_me['distance_meters'])}m)")
@@ -223,8 +299,7 @@ class LocationData:
 # https://locationsharinglib.readthedocs.io/en/latest/locationsharinglib.html#module-locationsharinglib.locationsharinglib
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
+def run():
     d = datetime.now()
 
     logging.basicConfig(level=logging.INFO)
@@ -248,7 +323,7 @@ if __name__ == '__main__':
                         type=str
                         )
     parser.add_argument('--autosave_interval', '-a',
-                        default=5.0,
+                        default=0.25,
                         dest='save_interval_min',
                         help='How often to save data in the file, in minutes',
                         type=float
@@ -280,3 +355,7 @@ if __name__ == '__main__':
             data.save()
         except NameError:
             pass
+
+
+if __name__ == '__main__':
+    run()

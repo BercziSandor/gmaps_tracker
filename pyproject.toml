@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "gmaps_tracker"
+version = "1.0.0"
+description = "Tool for storing shared locations"
+authors = ["Sandor Berczi <Berczi.Sandor@gmail.com>"]
+maintainers = ["Sandor Berczi <Berczi.Sandor@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/BercziSandor/gmaps_tracker/"
+keywords = [
+    "Google",
+    "Tracking",
+    "gmap"
+]
+
+packages = [
+    { include = "gmaps_tracker", from = "src" }
+]
+
+include = [
+    { path = "tests", format = "sdist" }
+]
+
+#[tool.poetry.build]
+
+
+[tool.poetry.dependencies]
+python = "^3.10"
+PyYAML = "^6.0"
+locationsharinglib = "^4.1.8"
+geographiclib = "^2.0"
+
+[tool.poetry.scripts]
+gmaps_tracker = "gmaps_tracker.gmaps_tracker:run"
+
+[tool.poetry.dev-dependencies]
+mypy = "^0.971"
+tox = "^3.25.1"
+pytest = "^7.1.2"
+pytest-cov = "^3.0.0"
+pytest-mock = "^3.8.2"
+
+[tool.poetry.urls]
+issues = "https://github.com/BercziSandor/gmaps_tracker/issues"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

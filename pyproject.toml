@@ -39,6 +39,8 @@ tox = "^3.25.1"
 pytest = "^7.1.2"
 pytest-cov = "^3.0.0"
 pytest-mock = "^3.8.2"
+types-PyYAML = "^6.0.11"
+pylint = "^2.14.5"
 
 [tool.poetry.urls]
 issues = "https://github.com/BercziSandor/gmaps_tracker/issues"
@@ -46,3 +48,17 @@ issues = "https://github.com/BercziSandor/gmaps_tracker/issues"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.mypy]
+files = "src"
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+show_error_codes = true
+strict = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+]

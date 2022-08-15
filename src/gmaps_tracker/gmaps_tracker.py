@@ -1,3 +1,7 @@
+"""
+# TODO
+TODOe
+"""
 import argparse
 import bz2
 import logging
@@ -25,7 +29,7 @@ def u_dt_to_str(dt: datetime, format_string=FORMAT_YYYYMMDD_HHMMSS) -> str:
     return dt.strftime(format_string)
 
 
-def u_epoch_to_dt(epoch: int) -> datetime:
+def u_epoch_to_dt(epoch: float) -> datetime:
     return datetime.fromtimestamp(epoch)
 
 
@@ -33,8 +37,8 @@ def u_str_to_dt(s, format_str=FORMAT_YYYYMMDD_HHMMSS) -> datetime:
     return datetime.strptime(str(s), format_str)
 
 
-def u_str_to_epoch(s, format_str=FORMAT_YYYYMMDD_HHMMSS) -> int:
-    return u_str_to_dt(s).timestamp()
+def u_str_to_epoch(s, format_str=FORMAT_YYYYMMDD_HHMMSS) -> float:
+    return u_str_to_dt(str(s)).timestamp()
 
 
 def u_epoch_to_str(epoch: int) -> str:
@@ -52,49 +56,46 @@ def get_service(cookies_file='cookies.txt', google_email='berczi.sandor@gmail.co
 
 
 class Location:
-    DIRECTION_NAMES_EN = ["north", "north east", "east", "south east", "south", "south west", "west",
-                          "north west"]
+    DIRECTION_NAMES_EN = ["north", "north east", "east", "south east", "south",
+                          "south west", "west", "north west"]
     DIRECTION_NAMES_HU = ["É", "ÉK", "K", "DK", "D", "DNY", "NY",
                           "ÉNY"]
 
-    DIRECTION_NAMES_HU_16 = ["É", "ÉÉK", "ÉK", "KÉK", "K", "KDK", "DK", "DDK", "D", "DDNY", "DNY", "NYDNY", "NY",
-                             "NYÉNY",
-                             "ÉNY", "NYÉNY"]
+    DIRECTION_NAMES_HU_16 = ["É", "ÉÉK", "ÉK", "KÉK", "K", "KDK", "DK", "DDK",
+                             "D", "DDNY", "DNY", "NYDNY", "NY", "NYÉNY", "ÉNY", "NYÉNY"]
 
-    def __init__(self, lat: float = None, lon: float = None, epoch: int = None, accuracy: float = None,
-                 event: dict = None, person: Person = None):
-        self.lat: float = None
-        self.lon: float = None
-        self.time: datetime = None
-        self.accuracy: float = None
+    def __init__(self, lat: float = 0.0, lon: float = 0.0, epoch: float = 0.0, accuracy: float = 0.0,
+                 event: dict = {}, person: Person = None):
+        self.lat: float
+        self.lon: float
+        self.time: datetime
+        self.accuracy: float
 
         if person:
-            self.lat: float = person.latitude
-            self.lon: float = person.longitude
-            self.time: datetime = person.datetime
-            self.accuracy: float = person.accuracy
-        elif event:
-            self.lat: float = event['lat']
-            self.lon: float = event['lon']
-            self.time: datetime = u_str_to_dt(str(event['timestamp']))
-            self.accuracy: float = event['accuracy']
-        elif lat:
-            self.lat: float = lat
-            self.lon: float = lon
-            self.time: datetime = datetime.fromtimestamp(epoch)
-            self.accuracy: float = accuracy
+            self.lat, self.lon = person.latitude, person.longitude
+            self.time = person.datetime
+            self.accuracy = person.accuracy
+        elif len(event) > 0:
+            self.lat, self.lon = event['lat'], event['lon']
+            self.time = u_str_to_dt(str(event['timestamp']))
+            self.accuracy = event['accuracy']
+        elif lat > 0:
+            self.lat, self.lon = lat, lon
+            self.time = u_epoch_to_dt(epoch)
+            self.accuracy = accuracy
         else:
-            return None
+            logging.error("Error at initialisation, aborting.")
+            sys.exit(1)
 
     def get_move_info(self, another):
-        def get_bearing_name(bearing: float) -> str:
+        def get_bearing_name(l_bearing: float) -> str:
             points: List[str] = ["É", "ÉK", "K", "DK", "D", "DNY", "NY",
                                  "ÉNY"]
-            bearing += (180.0 / len(points))
+            l_bearing += (180.0 / len(points))
 
-            bearing = bearing % 360
-            bearing = int(bearing / (360.0 / len(points)))
-            return points[bearing]
+            l_bearing = l_bearing % 360
+            l_bearing = int(l_bearing / (360.0 / len(points)))
+            return points[l_bearing]
 
         g = Geodesic.WGS84.Inverse(self.lat, self.lon, another.lat, another.lon)
         distance_meters = float(abs(g['s12']))
@@ -118,8 +119,9 @@ class Location:
 
 
 class LocationData:
-    def __init__(self, cookie_file: str, data_file_name='location_store.pickle.bz2', save_interval_min: float = 0.2,
-                 wait_between_queries_sec: int = 15, query_count=-2):
+    def __init__(self, cookie_file: str, data_file_name='location_store.pickle.bz2',
+                 save_interval_min: float = 0.2, wait_between_queries_sec: int = 15,
+                 query_count=-2):
         self.next_save = 0
         self.data = None
         self.service = get_service(cookies_file=cookie_file)
@@ -248,25 +250,27 @@ class LocationData:
         if sleep_in_secs is None:
             sleep_in_secs = self.wait_between_queries_sec
 
-        prev = {}
+        # prev:Dict[] = {}
         while True:
             googleResponses = self.service.get_all_people()
             now = int(datetime.now().timestamp())
             for googleResponse in googleResponses:
-                yymmddhhmmss: float = u_dt_to_str(googleResponse.datetime)
                 self.insert(person=googleResponse, now=now)
 
                 last_event = self.get_last_event_of_person(full_name=googleResponse.full_name)
                 e1 = Location(event=last_event) if last_event else None
-                e2 = Location(event=self.get_last_event_of_person(full_name=googleResponse.full_name))
+                e2 = Location(event=self.get_last_event_of_person(
+                    full_name=googleResponse.full_name)
+                )
                 if not e1:
                     continue
                 if e1.time == e2.time:
                     logging.info(" no change")
                 else:
                     move_info = e1.get_move_info(e2)
-                    move_info_to_me = Location(person=self.service.get_authenticated_person()).get_move_info(e2)
-                    if move_info['v'] > 2.0 and move_info['v'] < 900:
+                    move_info_to_me = Location(person=self.service.get_authenticated_person())\
+                        .get_move_info(e2)
+                    if 2.0 < move_info['v'] < 900:
                         logging.warning(f"Person is moving. Speed: {move_info['v']}km/h to {move_info['bearing_name']}")
                         logging.warning(f"Distance from you: {move_info['distance_meters']}")
                     else:

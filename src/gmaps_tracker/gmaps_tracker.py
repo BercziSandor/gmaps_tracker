@@ -12,7 +12,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Self, Dict, Any
 
 import yaml
 from geographiclib.geodesic import Geodesic
@@ -27,7 +27,7 @@ from locationsharinglib import Service, Person
 FORMAT_YYYYMMDD_HHMMSS = "%Y%m%d.%H%M%S"
 
 
-def u_dt_to_str(p_date: datetime, format_string=FORMAT_YYYYMMDD_HHMMSS) -> str:
+def u_dt_to_str(p_date: datetime, format_string: str = FORMAT_YYYYMMDD_HHMMSS) -> str:
     """
     Utility function for converting date to string in (own format)
     :param p_date:
@@ -46,7 +46,7 @@ def u_epoch_to_dt(epoch: float) -> datetime:
     return datetime.fromtimestamp(epoch)
 
 
-def u_str_to_dt(str_like_parameter, format_str=FORMAT_YYYYMMDD_HHMMSS) -> datetime:
+def u_str_to_dt(str_like_parameter: Any, format_str: str = FORMAT_YYYYMMDD_HHMMSS) -> datetime:
     """
     Utility function for converting (own format) string to date
     :param str_like_parameter:
@@ -56,7 +56,7 @@ def u_str_to_dt(str_like_parameter, format_str=FORMAT_YYYYMMDD_HHMMSS) -> dateti
     return datetime.strptime(str(str_like_parameter), format_str)
 
 
-def u_str_to_epoch(str_like_parameter="") -> float:
+def u_str_to_epoch(str_like_parameter: str = "") -> float:
     """
     Utility function for converting (own format) string to epoch
     :param str_like_parameter:
@@ -74,7 +74,7 @@ def u_epoch_to_str(epoch: int) -> str:
     return u_dt_to_str(u_epoch_to_dt(epoch))
 
 
-def get_service(cookies_file='cookies.txt', google_email='berczi.sandor@gmail.com') -> Service:
+def get_service(cookies_file: str = 'cookies.txt', google_email: str = 'berczi.sandor@gmail.com') -> Service:
     """
     Creates a connection with the Google service
     :param cookies_file:
@@ -117,7 +117,7 @@ class Location:
     DIRECTION_NAMES_HU_16 = ["É", "ÉÉK", "ÉK", "KÉK", "K", "KDK", "DK", "DDK",
                              "D", "DDNY", "DNY", "NYDNY", "NY", "NYÉNY", "ÉNY", "NYÉNY"]
 
-    def __init__(self, event: dict = None, lat: float = 0.0, lon: float = 0.0,
+    def __init__(self, event: Dict[Any, Any] = None, lat: float = 0.0, lon: float = 0.0,
                  epoch: float = 0.0, accuracy: float = 0.0,
                  person: Person = None):
         self.lat: float
@@ -141,7 +141,7 @@ class Location:
             logging.error("Error at initialisation, aborting.")
             sys.exit(1)
 
-    def get_move_info(self, another):
+    def get_move_info(self, another: Self) -> MoveInfo:
         """
         TODO
         :param another:
@@ -186,11 +186,11 @@ class LocationData:
     Class for storing all data
     """
 
-    def __init__(self, cookie_file: str, data_file_name='location_store.pickle.bz2',
+    def __init__(self, cookie_file: str, data_file_name: str = 'location_store.pickle.bz2',
                  save_interval_min: float = 0.2, wait_between_queries_sec: int = 15,
-                 query_count=-2):
+                 query_count: int = -2):
         self.next_save: float = 0.0
-        self.data: dict = {}
+        self.data: Dict[Any, Any] = {}
         self.service = get_service(cookies_file=cookie_file)
         self.data_file_name = data_file_name
         self.save_interval_min = save_interval_min
@@ -200,7 +200,7 @@ class LocationData:
         logging.info("Me: %s", str(self.me.full_name))
         self.load()
 
-    def insert(self, person: Person, now: int = int(datetime.now().timestamp())) -> None:
+    def insert(self, person: Person, now: int = 0) -> None:
         """
         Inserting a new event
         :param person:
@@ -209,6 +209,9 @@ class LocationData:
         """
         if person is None:
             return
+
+        if now == 0:
+            now = int(datetime.now().timestamp())
 
         full_name = person.full_name
         logging.info("** %s", full_name)
@@ -222,7 +225,7 @@ class LocationData:
         # location = geolocator.reverse(f"{person.latitude}, {person.longitude}")
         # address = location.address
 
-        e_0: dict = {
+        e_0: Dict[Any, Any] = {
             'inserted_at': float(u_dt_to_str(u_epoch_to_dt(now))),
             'timestamp': float(u_dt_to_str(u_epoch_to_dt(int(person.datetime.timestamp())))),
             'lat': person.latitude,
@@ -281,7 +284,7 @@ class LocationData:
             data_entry_count += len(self.data[person])
         return data_entry_count
 
-    def save(self):
+    def save(self) -> None:
         """
         Save data to a file
         :return:
@@ -304,7 +307,7 @@ class LocationData:
         if not os.path.exists(self.data_file_name):
             self.save()
             do_schedule = True
-        elif self.next_save is None or self.next_save == 0:
+        elif self.next_save == 0.0:
             do_schedule = True
         elif self.next_save <= now:
             self.save()
@@ -316,17 +319,14 @@ class LocationData:
             logging.info("auto_save(): Next save scheduled in %s minutes.", self.save_interval_min)
             self.next_save = now + float(self.save_interval_min) * 60
 
-    def get_last_event_of_person(self, full_name: str):
+    def get_last_event_of_person(self, full_name: str) -> Dict[Any, Any]:
         """
         Finf the last event to a specific user.
         :param full_name:
         :return:
         """
-        if full_name not in self.data:
-            return None
-        # list
-        k = None
-        if len(self.data[full_name]) > 0:
+        k: Dict[Any, Any] = {}
+        if full_name in self.data:
             k = self.data[full_name][-1]
         return k
 
@@ -335,7 +335,7 @@ class LocationData:
         # last_timestamp = k[-1]
         # return self.data[full_name][last_timestamp]
 
-    def collect(self, now=int(datetime.now().timestamp())):
+    def collect(self, now: int = int(datetime.now().timestamp())) -> None:
         """
         Do the collection of the info once
         :param now:
@@ -345,16 +345,16 @@ class LocationData:
         for person in self.service.get_all_people():
             self.insert(person=person, now=now)
 
-    def collect_periodically(self, query_count: int = None, sleep_in_secs: int = None):
+    def collect_periodically(self, query_count: int = -1, sleep_in_secs: int = -1) -> None:
         """
         Do the query periodically.
         :param query_count:
         :param sleep_in_secs:
         :return:
         """
-        if query_count is None:
+        if query_count == -1:
             query_count = self.query_count
-        if sleep_in_secs is None:
+        if sleep_in_secs == -1:
             sleep_in_secs = self.wait_between_queries_sec
 
         # prev:Dict[] = {}
@@ -376,10 +376,10 @@ class LocationData:
                     move_info = location_1.get_move_info(location_2)
                     move_info_to_me = Location(person=self.service.get_authenticated_person()) \
                         .get_move_info(location_2)
-                    if 2.0 < move_info['v'] < 900:
+                    if 2.0 < move_info.v_kmh < 900:
                         logging.warning("Person is moving. Speed: %skm/h "
                                         "to %s", move_info.v_kmh, move_info.bearing_name)
-                        logging.warning("Distance from you: %s", move_info['distance_meters'])
+                        logging.warning("Distance from you: %s", move_info.distance_meters)
                     else:
                         logging.info(" Not moving. (%skm/h)", move_info.v_kmh)
 
@@ -412,7 +412,7 @@ class LocationData:
 # https://locationsharinglib.readthedocs.io/en/latest/locationsharinglib.html#module-locationsharinglib.locationsharinglib
 
 
-def run():
+def run() -> None:
     """
     Main process
     :return:

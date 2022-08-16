@@ -41,6 +41,10 @@ pytest-cov = "^3.0.0"
 pytest-mock = "^3.8.2"
 types-PyYAML = "^6.0.11"
 pylint = "^2.14.5"
+coverage = {extras = ["toml"], version = "^6.4.3"}
+flake8 = "^5.0.4"
+flake8-bugbear = "^22.7.1"
+black = "^22.6.0"
 
 [tool.poetry.urls]
 issues = "https://github.com/BercziSandor/gmaps_tracker/issues"
@@ -62,3 +66,11 @@ enable_error_code = [
     "redundant-expr",
     "truthy-bool",
 ]
+
+[tool.coverage.run]
+omit = [".*", "*/site-packages/*"]
+
+[tool.coverage.report]
+fail_under = 100
+
+

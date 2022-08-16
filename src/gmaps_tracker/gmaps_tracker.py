@@ -10,6 +10,7 @@ import pickle
 import sys
 #
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List
 
@@ -89,21 +90,19 @@ def get_service(cookies_file='cookies.txt', google_email='berczi.sandor@gmail.co
     return l_service
 
 
-class MoveInfo():
+@dataclass
+class MoveInfo:
     """
     TODO
     """
 
-    def __init__(self, distance_meters: float, bearing: float, delta_t_sec: float,
-                 bearing_name: str, v_kmh: float, accuracy: float,
-                 different_points_for_sure: bool):
-        self.distance_meters: float = distance_meters
-        self.bearing: float = bearing
-        self.delta_t_sec: float = delta_t_sec
-        self.bearing_name: str = bearing_name
-        self.v_kmh: float = v_kmh
-        self.accuracy: float = accuracy
-        self.different_points_for_sure: bool = different_points_for_sure
+    distance_meters: float
+    bearing: float
+    delta_t_sec: float
+    bearing_name: str
+    v_kmh: float
+    accuracy: float
+    different_points_for_sure: bool
 
 
 class Location:
@@ -118,9 +117,9 @@ class Location:
     DIRECTION_NAMES_HU_16 = ["É", "ÉÉK", "ÉK", "KÉK", "K", "KDK", "DK", "DDK",
                              "D", "DDNY", "DNY", "NYDNY", "NY", "NYÉNY", "ÉNY", "NYÉNY"]
 
-    def __init__(self, lat: float = 0.0, lon: float = 0.0,
+    def __init__(self, event: dict = None, lat: float = 0.0, lon: float = 0.0,
                  epoch: float = 0.0, accuracy: float = 0.0,
-                 event: dict = {}, person: Person = None):
+                 person: Person = None):
         self.lat: float
         self.lon: float
         self.time: datetime
@@ -130,7 +129,7 @@ class Location:
             self.lat, self.lon = person.latitude, person.longitude
             self.time = person.datetime
             self.accuracy = person.accuracy
-        elif len(event) > 0:
+        elif event:
             self.lat, self.lon = event['lat'], event['lon']
             self.time = u_str_to_dt(str(event['timestamp']))
             self.accuracy = event['accuracy']
@@ -190,8 +189,8 @@ class LocationData:
     def __init__(self, cookie_file: str, data_file_name='location_store.pickle.bz2',
                  save_interval_min: float = 0.2, wait_between_queries_sec: int = 15,
                  query_count=-2):
-        self.next_save = 0.0
-        self.data = {}
+        self.next_save: float = 0.0
+        self.data: dict = {}
         self.service = get_service(cookies_file=cookie_file)
         self.data_file_name = data_file_name
         self.save_interval_min = save_interval_min
@@ -368,8 +367,7 @@ class LocationData:
                 last_event = self.get_last_event_of_person(full_name=google_response.full_name)
                 location_1 = Location(event=last_event) if last_event else None
                 location_2 = Location(event=self.get_last_event_of_person(
-                    full_name=google_response.full_name)
-                )
+                    full_name=google_response.full_name))
                 if not location_1:
                     continue
                 if location_1.time == location_2.time:
@@ -380,17 +378,17 @@ class LocationData:
                         .get_move_info(location_2)
                     if 2.0 < move_info['v'] < 900:
                         logging.warning("Person is moving. Speed: %skm/h "
-                                        "to %s", move_info['v'], move_info['bearing_name'])
+                                        "to %s", move_info.v_kmh, move_info.bearing_name)
                         logging.warning("Distance from you: %s", move_info['distance_meters'])
                     else:
-                        logging.info(" Not moving. (%skm/h)", move_info['v'])
+                        logging.info(" Not moving. (%skm/h)", move_info.v_kmh)
 
-                    if move_info_to_me['distance_meters'] < 200:
+                    if move_info_to_me.distance_meters < 200:
                         logging.info(" Near to you. (%sm)",
-                                     int(move_info_to_me['distance_meters']))
+                                     int(move_info_to_me.distance_meters))
                     else:
                         logging.info(" Far from you. (%sm)",
-                                     int(move_info_to_me['distance_meters']))
+                                     int(move_info_to_me.distance_meters))
             if query_count == 0:
                 break
             logging.info("Waiting %s seconds...", sleep_in_secs)
